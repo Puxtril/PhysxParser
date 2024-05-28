@@ -90,9 +90,9 @@ Physx::HeightFieldReader::convertToMesh(const HeightFieldHeader& header, const s
 
         // I think this is the default value?
         // Could be scaled by header.maxBounds and header.minBounds
-        mesh.verts[i][0] = curColumn;
+        mesh.verts[i][0] = (float)curColumn;
         mesh.verts[i][1] = samples[i].height;
-        mesh.verts[i][2] = curRow;
+        mesh.verts[i][2] = (float)curRow;
     }
 
     // Create indices
@@ -169,9 +169,9 @@ Physx::HeightFieldReader::convertToMeshSeparateMaterials(const HeightFieldHeader
 
         // I think this is the default value?
         // Could be scaled by header.maxBounds and header.minBounds
-        mesh.verts[i][0] = curColumn;
+        mesh.verts[i][0] = (float)curColumn;
         mesh.verts[i][1] = samples[i].height;
-        mesh.verts[i][2] = curRow;
+        mesh.verts[i][2] = (float)curRow;
     }
 
     std::vector<size_t> materialIndexArrayCursor(indexCounts.size());
