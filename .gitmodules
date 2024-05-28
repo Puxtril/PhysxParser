@@ -1,0 +1,3 @@
+[submodule "lib/Binary-Reader"]
+	path = lib/Binary-Reader
+	url = https://github.com/Puxtril/Binary-Reader.git
