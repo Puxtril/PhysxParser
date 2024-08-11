@@ -75,114 +75,20 @@ Physx::HeightFieldReader::convertToMesh(const HeightFieldHeader& header, const s
 {
     const uint32_t verticesPerRow = header.columnCount;
     const uint32_t verticesPerColumn = header.rowCount;
-    const size_t vertexCount = verticesPerColumn * verticesPerRow;
-    const size_t indexCount = __getIndexCount(samples);
 
     HeightFieldMesh mesh;
-    mesh.verts.resize(vertexCount);
-    mesh.indices.resize(indexCount);
+    const size_t triangleCount = __getTriangleCount(samples);
+    const size_t vertexCount = triangleCount * 3;
 
-    // Create vertices
-    for (uint32_t i = 0; i < vertexCount; i++)
-    {
-        const uint32_t curColumn = i % verticesPerRow;
-        const uint32_t curRow = i / verticesPerColumn;
+    mesh.materials.resize(triangleCount);
+    mesh.vertexPositions.resize(vertexCount);
 
-        // I think this is the default value?
-        // Could be scaled by header.maxBounds and header.minBounds
-        mesh.verts[i][0] = (float)curColumn;
-        mesh.verts[i][1] = samples[i].height;
-        mesh.verts[i][2] = (float)curRow;
-    }
-
-    // Create indices
-    uint32_t indexCursor = 0;
+    uint32_t vertCursor = 0;
+    uint32_t materialCursor = 0;
     for (uint32_t i = 0; i < header.sampleCount; i++)
     {
         const uint32_t curColumn = i % header.columnCount;
         const uint32_t curRow = i / header.rowCount;
-        const uint32_t curVertex = verticesPerRow * curRow + curColumn;
-        const uint32_t belowCurVertex = verticesPerRow * (curRow + 1) + curColumn;
-
-        const HeightFieldSample& curSample = samples[i];
-
-        // Edge of mesh
-        if (curColumn == verticesPerColumn - 1 || curRow == verticesPerRow - 1)
-            continue;
-
-        // Indices generation
-        if (curSample.tesselated)
-        {
-            if (curSample.material0 != 127)
-            {
-                mesh.indices[indexCursor++] = curVertex;
-                mesh.indices[indexCursor++] = belowCurVertex;
-                mesh.indices[indexCursor++] = belowCurVertex + 1;
-            }
-            if (curSample.material1 != 127)
-            {
-                mesh.indices[indexCursor++] = curVertex;
-                mesh.indices[indexCursor++] = belowCurVertex + 1;
-                mesh.indices[indexCursor++] = curVertex + 1;
-            }
-        }
-        else
-        {
-            if (curSample.material0 != 127)
-            {
-                mesh.indices[indexCursor++] = curVertex + 1;
-                mesh.indices[indexCursor++] = curVertex;
-                mesh.indices[indexCursor++] = belowCurVertex;
-            }
-            if (curSample.material1 != 127)
-            {
-                mesh.indices[indexCursor++] = belowCurVertex;
-                mesh.indices[indexCursor++] = belowCurVertex + 1;
-                mesh.indices[indexCursor++] = curVertex + 1;
-            }
-        }
-    }
-
-    return mesh;
-}
-
-Physx::HeightFieldMeshSplit
-Physx::HeightFieldReader::convertToMeshSeparateMaterials(const HeightFieldHeader& header, const std::vector<HeightFieldSample>& samples)
-{
-    const uint32_t verticesPerRow = header.columnCount;
-    const uint32_t verticesPerColumn = header.rowCount;
-    const size_t vertexCount = verticesPerColumn * verticesPerRow;
-
-    HeightFieldMeshSplit mesh;
-    mesh.verts.resize(vertexCount);
-
-    std::vector<size_t> indexCounts = __getIndexCountPerMaterial(samples);
-    mesh.indexArrays.resize(indexCounts.size());
-    for (size_t i = 0; i < indexCounts.size(); i++)
-        mesh.indexArrays[i].resize(indexCounts[i]);
-
-    // Create vertices
-    for (uint32_t i = 0; i < vertexCount; i++)
-    {
-        const uint32_t curColumn = i % verticesPerRow;
-        const uint32_t curRow = i / verticesPerColumn;
-
-        // I think this is the default value?
-        // Could be scaled by header.maxBounds and header.minBounds
-        mesh.verts[i][0] = (float)curColumn;
-        mesh.verts[i][1] = samples[i].height;
-        mesh.verts[i][2] = (float)curRow;
-    }
-
-    std::vector<size_t> materialIndexArrayCursor(indexCounts.size());
-
-    // Create indices
-    for (uint32_t i = 0; i < header.sampleCount; i++)
-    {
-        const uint32_t curColumn = i % header.columnCount;
-        const uint32_t curRow = i / header.rowCount;
-        const uint32_t curVertex = verticesPerRow * curRow + curColumn;
-        const uint32_t belowCurVertex = verticesPerRow * (curRow + 1) + curColumn;
 
         const HeightFieldSample& curSample = samples[i];
 
@@ -194,34 +100,34 @@ Physx::HeightFieldReader::convertToMeshSeparateMaterials(const HeightFieldHeader
         {
             if (curSample.material0 != 127)
             {
-                const uint8_t& mat = curSample.material0;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = curVertex;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = belowCurVertex;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = belowCurVertex + 1;
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn    ), (float)samples[i                     ].height, (float)(curRow    )};
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn    ), (float)samples[i + verticesPerRow    ].height, (float)(curRow + 1)};
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn + 1), (float)samples[i + verticesPerRow + 1].height, (float)(curRow + 1)};
+                mesh.materials[materialCursor++] = curSample.material0;
             }
             if (curSample.material1 != 127)
             {
-                const uint8_t& mat = curSample.material1;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = curVertex;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = belowCurVertex + 1;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = curVertex + 1;
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn    ), (float)samples[i                     ].height, (float)(curRow    )};
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn + 1), (float)samples[i + verticesPerRow + 1].height, (float)(curRow + 1)};
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn + 1), (float)samples[i + 1                 ].height, (float)(curRow    )};
+                mesh.materials[materialCursor++] = curSample.material1;
             }
         }
         else
         {
             if (curSample.material0 != 127)
             {
-                const uint8_t& mat = curSample.material0;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = curVertex + 1;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = curVertex;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = belowCurVertex;
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn + 1), (float)samples[i + 1                 ].height, (float)(curRow    )};
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn    ), (float)samples[i                     ].height, (float)(curRow    )};
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn    ), (float)samples[i + verticesPerRow    ].height, (float)(curRow + 1)};
+                mesh.materials[materialCursor++] = curSample.material0;
             }
             if (curSample.material1 != 127)
             {
-                const uint8_t& mat = curSample.material1;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = belowCurVertex;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = belowCurVertex + 1;
-                mesh.indexArrays[mat][materialIndexArrayCursor[mat]++] = curVertex + 1;
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn    ), (float)samples[i + verticesPerRow    ].height, (float)(curRow + 1)};
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn + 1), (float)samples[i + verticesPerRow + 1].height, (float)(curRow + 1)};
+                mesh.vertexPositions[vertCursor++] = {(float)(curColumn + 1), (float)samples[i + 1                 ].height, (float)(curRow    )};
+                mesh.materials[materialCursor++] = curSample.material1;
             }
         }
     }
@@ -230,19 +136,19 @@ Physx::HeightFieldReader::convertToMeshSeparateMaterials(const HeightFieldHeader
 }
 
 size_t
-Physx::HeightFieldReader::__getIndexCount(const std::vector<HeightFieldSample>& samples)
+Physx::HeightFieldReader::__getTriangleCount(const std::vector<HeightFieldSample>& samples)
 {
-    size_t indexCount = 0;
+    size_t triangleCount = 0;
 
     for (uint32_t i = 0; i < samples.size(); i++)
     {
         if (samples[i].material0 != 127)
-            indexCount += 3;
+            triangleCount++;
         if (samples[i].material1 != 127)
-            indexCount += 3;
+            triangleCount++;
     }
 
-    return indexCount;
+    return triangleCount;
 }
 
 std::vector<size_t>

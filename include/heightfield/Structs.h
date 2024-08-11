@@ -59,16 +59,9 @@ namespace Physx
         uint8_t material1;
     };
 
-    // Converted mesh structs
     struct HeightFieldMesh
     {
-        std::vector<std::array<float, 3>> verts;
-        std::vector<uint32_t> indices;
-    };
-
-    struct HeightFieldMeshSplit
-    {
-        std::vector<std::array<float, 3>> verts;
-        std::vector<std::vector<uint32_t>> indexArrays;
+        std::vector<std::array<float, 3>> vertexPositions;
+        std::vector<uint8_t> materials;
     };
 }
