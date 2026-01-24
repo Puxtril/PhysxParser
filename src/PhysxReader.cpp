@@ -5,19 +5,19 @@ using namespace Physx;
 PhysxReader::PhysxReader(const std::filesystem::path& filepath)
     : m_managedReader(true)
 {
-    m_reader = new BinaryReader::BinaryReaderFile(filepath.string());
+    m_reader = new BinaryReader::File(filepath.string());
 }
 
 PhysxReader::PhysxReader(const std::string& filepath)
     : m_managedReader(true)
 {
-    m_reader = new BinaryReader::BinaryReaderFile(filepath);
+    m_reader = new BinaryReader::File(filepath);
 }
 
 PhysxReader::PhysxReader(std::vector<uint8_t>&& data)
     : m_managedReader(true)
 {
-    m_reader = new BinaryReader::BinaryReaderBuffered(std::move(data));
+    m_reader = new BinaryReader::Buffered(std::move(data));
 }
 
 PhysxReader::PhysxReader(BinaryReader::BinaryReader* reader)

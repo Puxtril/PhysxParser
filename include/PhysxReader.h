@@ -1,7 +1,7 @@
 #pragma once
 
-#include "BinaryReaderBuffered.h"
-#include "BinaryReaderFile.h"
+#include "BinaryReader/Buffered.h"
+#include "BinaryReader/File.h"
 
 #include <filesystem>
 #include <string>
