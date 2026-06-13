@@ -64,4 +64,11 @@ namespace Physx
         std::vector<std::array<float, 3>> vertexPositions;
         std::vector<uint8_t> materials;
     };
+
+    struct HeightFieldIndexedMesh
+    {
+        std::vector<std::array<float, 3>> vertexPositions;
+        std::vector<uint8_t> materials;
+        std::vector<uint32_t> indices;
+    };
 }
