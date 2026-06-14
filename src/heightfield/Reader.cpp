@@ -135,8 +135,6 @@ Physx::HeightFieldReader::convertToMesh(const HeightFieldHeader& header, const s
     return mesh;
 }
 
-// This is definitely in need of optimization.
-// I got this working with the first idea I had.
 Physx::HeightFieldIndexedMesh
 Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, const std::vector<HeightFieldSample>& samples)
 {
@@ -145,19 +143,22 @@ Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, 
 
     HeightFieldIndexedMesh mesh;
 
-    std::vector<bool> validVertices(header.sampleCount);
+    std::vector<std::vector<bool>> validVerticesByMaterial(256, std::vector<bool>(header.sampleCount, false));
+    std::vector<uint32_t> vertexCountByMaterial(256, 0);
+    std::vector<uint32_t> indexCountByMaterial(256, 0);
     size_t faceCount = 0;
     uint32_t vertexCount = 0;
 
     // Calculate the total valid vertices for the final mesh (Skip the holes).
     // We must go per-material to calculate the edges of materials.
     // Finding which vertices are valid, I've found the easiest method is to use a bitarray (vector of bools, because bitarray requires static allocation...)
+    // Since this is intensive, store the outputs in a vector. We don't want to re-calculate this bitarray.
     for (int iMaterial = 0; iMaterial < 256; iMaterial++)
     {
         if (iMaterial == 127)
             continue;
 
-        std::fill_n(validVertices.begin(), validVertices.size(), false);
+        std::vector<bool>& validVertices = validVerticesByMaterial[iMaterial];
 
         // Find which vertices in the current material are valid
         for (uint32_t i = 0; i < header.sampleCount; i++)
@@ -179,14 +180,14 @@ Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, 
                     validVertices[curVertex] = true;
                     validVertices[curVertex + verticesPerRow] = true;
                     validVertices[curVertex + verticesPerRow + 1] = true;
-                    faceCount += 3;
+                    indexCountByMaterial[iMaterial] += 3;
                 }
                 if (curSample.material1 == iMaterial)
                 {
                     validVertices[curVertex] = true;
                     validVertices[curVertex + verticesPerRow + 1] = true;
                     validVertices[curVertex + 1] = true;
-                    faceCount += 3;
+                    indexCountByMaterial[iMaterial] += 3;
                 }
             }
             else
@@ -196,14 +197,14 @@ Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, 
                     validVertices[curVertex + 1] = true;
                     validVertices[curVertex] = true;
                     validVertices[curVertex + verticesPerRow] = true;
-                    faceCount += 3;
+                    indexCountByMaterial[iMaterial] += 3;
                 }
                 if (curSample.material1 == iMaterial)
                 {
                     validVertices[curVertex + verticesPerRow] = true;
                     validVertices[curVertex + verticesPerRow + 1] = true;
                     validVertices[curVertex + 1] = true;
-                    faceCount += 3;
+                    indexCountByMaterial[iMaterial] += 3;
                 }
             }
         }
@@ -212,11 +213,14 @@ Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, 
         for (int i = 0; i < header.sampleCount; i++)
         {
             if (validVertices[i])
-                vertexCount++;
+                vertexCountByMaterial[iMaterial]++;
         }
+
+        vertexCount += vertexCountByMaterial[iMaterial];
+        faceCount += indexCountByMaterial[iMaterial];
     }
 
-    // Use the calculated variables to declare our final size.
+    // Use the calculated variables to declare our final sizes.
     mesh.vertexPositions.resize(vertexCount);
     mesh.materials.resize(vertexCount);
     mesh.indices.resize(faceCount);
@@ -230,66 +234,9 @@ Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, 
         if (iMaterial == 127)
             continue;
 
-        size_t curIndexCount = 0;
-
-        // Yes, this is re-running the same code used above to calculate vertex counts.
-        // I chose this over storing above calculations (more processing vs more RAM usage)
-        std::fill_n(validVertices.begin(), validVertices.size(), false);
-        for (uint32_t i = 0; i < header.sampleCount; i++)
-        {
-            const uint32_t curColumn = i % header.columnCount;
-            const uint32_t curRow = i / header.rowCount;
-
-            const HeightFieldSample& curSample = samples[i];
-
-            // Edge of mesh
-            if (curColumn == verticesPerColumn - 1 || curRow == verticesPerRow - 1)
-                continue;
-
-            const uint32_t curVertex = curRow * verticesPerRow + curColumn;
-            if (curSample.tesselated)
-            {
-                if (curSample.material0 == iMaterial)
-                {
-                    validVertices[curVertex] = true;
-                    validVertices[curVertex + verticesPerRow] = true;
-                    validVertices[curVertex + verticesPerRow + 1] = true;
-                    curIndexCount += 3;
-                }
-                if (curSample.material1 == iMaterial)
-                {
-                    validVertices[curVertex] = true;
-                    validVertices[curVertex + verticesPerRow + 1] = true;
-                    validVertices[curVertex + 1] = true;
-                    curIndexCount += 3;
-                }
-            }
-            else
-            {
-                if (curSample.material0 == iMaterial)
-                {
-                    validVertices[curVertex + 1] = true;
-                    validVertices[curVertex] = true;
-                    validVertices[curVertex + verticesPerRow] = true;
-                    curIndexCount += 3;
-                }
-                if (curSample.material1 == iMaterial)
-                {
-                    validVertices[curVertex + verticesPerRow] = true;
-                    validVertices[curVertex + verticesPerRow + 1] = true;
-                    validVertices[curVertex + 1] = true;
-                    curIndexCount += 3;
-                }
-            }
-        }
-
-        // Vertex count for this material.
-        uint32_t curVertexCount = 0;
-        for (int i = 0; i < header.sampleCount; i++)
-        {
-            if (validVertices[i])
-                curVertexCount++;
-        }
+        const std::vector<bool>& curValidVertices = validVerticesByMaterial[iMaterial];
+        const uint32_t curVertexCount = vertexCountByMaterial[iMaterial];
+        const uint32_t curIndexCount = indexCountByMaterial[iMaterial]; 
 
         if (curVertexCount == 0)
             continue;
@@ -298,7 +245,7 @@ Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, 
         size_t vertexCursor = vertexOffset;
         for (int i = 0; i < header.sampleCount; i++)
         {
-            if (!validVertices[i])
+            if (!curValidVertices[i])
                 continue;
 
             const uint32_t curColumn = i % header.columnCount;
@@ -316,7 +263,7 @@ Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, 
         uint32_t vertCursorNextRow = vertexOffset;
         for (uint32_t i = 0; i < verticesPerRow; i++)
         {
-            if (validVertices[i])
+            if (curValidVertices[i])
                 vertCursorNextRow += 1;
         }
         
@@ -368,17 +315,17 @@ Physx::HeightFieldReader::convertToIndexedMesh(const HeightFieldHeader& header, 
 
             // Advance the 2 cursors.
             // If we hit the heightfield edge, skip that too.
-            if (validVertices[iSample])
+            if (curValidVertices[iSample])
             {
                 vertCursor++;
-                if (curColumn == verticesPerRow - 2 && validVertices[iSample + 1])
+                if (curColumn == verticesPerRow - 2 && curValidVertices[iSample + 1])
                     vertCursor++;
             }
 
-            if (validVertices[iSample + verticesPerRow])
+            if (curValidVertices[iSample + verticesPerRow])
             {
                 vertCursorNextRow++;
-                if (curColumn == verticesPerRow - 2 && validVertices[iSample + verticesPerRow + 1])
+                if (curColumn == verticesPerRow - 2 && curValidVertices[iSample + verticesPerRow + 1])
                     vertCursorNextRow++;
             }
         }
